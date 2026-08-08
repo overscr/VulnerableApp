@@ -202,14 +202,35 @@ public class VulnerableAppConfiguration {
     private static final long MAX_UPLOAD_SIZE_OVERRIDE_PATH_BYTES = 10L * 1024 * 1024;
 
     /**
-     * Customized MultipartFilter bean disables default max upload size for multipart files and
-     * their overall requests, for select paths. See {@link
-     * UnrestrictedFileUpload#getVulnerablePayloadLevel10()} for usage.
+     * Customized MultipartFilter bean bounds the accepted multipart size for select paths. See
+     * {@link UnrestrictedFileUpload#getVulnerablePayloadLevel10()} for usage.
      */
     @Bean
     @Order(0)
     public MultipartFilter multipartFilter() {
         class MaxUploadSizeOverrideMultipartFilter extends MultipartFilter {
+            @Override
+            protected void doFilterInternal(
+                    HttpServletRequest request,
+                    HttpServletResponse response,
+                    FilterChain filterChain)
+                    throws ServletException, IOException {
+                try {
+                    super.doFilterInternal(request, response, filterChain);
+                } catch (org.springframework.web.multipart.MaxUploadSizeExceededException e) {
+                    // The size bound above is enforced by the resolver, before this request ever
+                    // reaches a controller, so a request over that bound never gets the chance to
+                    // reach the ordinary rejection path a handler uses for input it declines to
+                    // store. Answered the same way here instead of letting the exception surface
+                    // as a server error.
+                    response.setStatus(HttpServletResponse.SC_OK);
+                    response.setContentType("application/json");
+                    response.setCharacterEncoding("UTF-8");
+                    response.getWriter().write("{\"content\":\"Input is invalid\",\"isValid\":false}");
+                    response.getWriter().flush();
+                }
+            }
+
             @Override
             protected MultipartResolver lookupMultipartResolver(HttpServletRequest request) {
                 if (MAX_FILE_UPLOAD_SIZE_OVERRIDE_PATHS.contains(request.getServletPath())) {
