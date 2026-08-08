@@ -71,10 +71,14 @@ public class EncryptionUtils {
         new SecureRandom().nextBytes(salt);
     }
 
+    // CWE-916: a single PBKDF2 iteration provides essentially no protection against brute
+    // force. A much higher iteration count makes each key-derivation attempt expensive.
+    private static final int PBKDF2_ITERATIONS = 65536;
+
     public static SecretKey getKeyFromPassword(String password) throws EncryptionException {
         try {
             SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-            KeySpec spec = new PBEKeySpec(password.toCharArray(), salt, 1, 128);
+            KeySpec spec = new PBEKeySpec(password.toCharArray(), salt, PBKDF2_ITERATIONS, 128);
 
             return new SecretKeySpec(factory.generateSecret(spec).getEncoded(), "AES");
         } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
