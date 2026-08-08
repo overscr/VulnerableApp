@@ -185,6 +185,15 @@ public class VulnerableAppConfiguration {
         return new BCryptPasswordEncoder();
     }
 
+    // Fixed: this used to be -1 (unlimited), which meant the resource-consumption DoS this
+    // path is meant to defend against (LEVEL_9's UNCONTROLLED_RESOURCE_CONSUMPTION challenge)
+    // could never actually be stopped by an application-level size check alone - the multipart
+    // resolver would already have fully buffered/spooled an arbitrarily large request body to
+    // memory/disk before the controller method (and its file.getSize() check) ever runs. Bound
+    // it at the same 10MB ceiling enforced in UnrestrictedFileUpload#getVulnerablePayloadLevel9
+    // so oversized uploads are rejected during parsing instead of only after being persisted.
+    private static final long MAX_UPLOAD_SIZE_OVERRIDE_PATH_BYTES = 10L * 1024 * 1024;
+
     /**
      * Customized MultipartFilter bean disables default max upload size for multipart files and
      * their overall requests, for select paths. See {@link
@@ -198,8 +207,8 @@ public class VulnerableAppConfiguration {
             protected MultipartResolver lookupMultipartResolver(HttpServletRequest request) {
                 if (MAX_FILE_UPLOAD_SIZE_OVERRIDE_PATHS.contains(request.getServletPath())) {
                     CommonsMultipartResolver multipart = new CommonsMultipartResolver();
-                    multipart.setMaxUploadSize(-1);
-                    multipart.setMaxUploadSizePerFile(-1);
+                    multipart.setMaxUploadSize(MAX_UPLOAD_SIZE_OVERRIDE_PATH_BYTES);
+                    multipart.setMaxUploadSizePerFile(MAX_UPLOAD_SIZE_OVERRIDE_PATH_BYTES);
                     return multipart;
                 } else {
                     // returns default implementation
