@@ -283,6 +283,13 @@ public class VulnerableAppConfiguration {
                     response.setHeader("X-Frame-Options", "DENY");
                     response.setHeader("Content-Security-Policy", "frame-ancestors 'none'");
                 }
+                // Stored uploads are served back by the default resource handler, which derives a
+                // content type from the file extension. Without this a browser is free to ignore
+                // that type and re-interpret the bytes - so a file accepted as an image but
+                // containing markup can still be rendered as a document. Declaring the type
+                // authoritative keeps a stored file being treated as the kind of file it was
+                // accepted as.
+                response.setHeader("X-Content-Type-Options", "nosniff");
                 filterChain.doFilter(request, response);
             }
         };
