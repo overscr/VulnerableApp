@@ -6,7 +6,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
+import javax.servlet.FilterChain;
+import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import javax.sql.DataSource;
 import org.sasanlabs.internal.utility.LevelConstants;
 import org.sasanlabs.service.vulnerability.fileupload.UnrestrictedFileUpload;
@@ -30,6 +33,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.DataSourceInitializer;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.multipart.MultipartResolver;
 import org.springframework.web.multipart.commons.CommonsMultipartResolver;
 import org.springframework.web.multipart.support.MultipartFilter;
@@ -49,6 +53,9 @@ public class VulnerableAppConfiguration {
     private static final List<String> MAX_FILE_UPLOAD_SIZE_OVERRIDE_PATHS =
             Arrays.asList(
                     "/" + UnrestrictedFileUpload.CONTROLLER_PATH + "/" + LevelConstants.LEVEL_9);
+
+    /** Paths whose handler already sets its own framing headers, so the filter must not repeat them. */
+    private static final String CLICKJACKING_CONTROLLER_PATH = "/ClickjackingVulnerability";
 
     /**
      * Will Inject MessageBundle into messageSource bean.
@@ -218,5 +225,45 @@ public class VulnerableAppConfiguration {
         }
         ;
         return new MaxUploadSizeOverrideMultipartFilter();
+    }
+
+    /**
+     * Sends framing protection on every response, not only on the JSON answers the clickjacking
+     * levels' controller methods produce.
+     *
+     * <p>A clickjacking attack frames whatever a victim's browser actually renders, and the level
+     * pages themselves are plain HTML/JS served straight out of {@code static/} by the default
+     * resource handler - no controller in this application ever touches them. Setting {@code
+     * X-Frame-Options}/{@code Content-Security-Policy} only on the API JSON response therefore left
+     * the page the victim is tricked into visiting (and everything else served by this app) fully
+     * embeddable. This filter runs before that resource handler and adds the headers to every
+     * response so the whole application - not just one JSON endpoint - refuses to be framed.
+     * {@code DENY} is used rather than {@code SAMEORIGIN} because a same-origin attacker page is
+     * already enough to mount a UI-redress/overlay attack.
+     */
+    @Bean
+    @Order(1)
+    public OncePerRequestFilter framingProtectionFilter() {
+        return new OncePerRequestFilter() {
+            @Override
+            protected void doFilterInternal(
+                    HttpServletRequest request,
+                    HttpServletResponse response,
+                    FilterChain filterChain)
+                    throws ServletException, IOException {
+                // The clickjacking controller sets these headers itself (with level-specific
+                // values for the levels that demonstrate a particular header configuration), and
+                // headers set here are appended rather than replacing what the handler sets.
+                // Browsers ignore a header entirely once it appears twice, which would silently
+                // disable the very protection those levels set out to demonstrate. Only paths the
+                // controller does not own get the header from this filter.
+                String path = request.getServletPath();
+                if (path == null || !path.startsWith(CLICKJACKING_CONTROLLER_PATH)) {
+                    response.setHeader("X-Frame-Options", "DENY");
+                    response.setHeader("Content-Security-Policy", "frame-ancestors 'none'");
+                }
+                filterChain.doFilter(request, response);
+            }
+        };
     }
 }

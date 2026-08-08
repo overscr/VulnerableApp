@@ -2,12 +2,12 @@
 	{
 		"algorithm": "HS256",
 		"strength": "LOW",
-		"key": "TlVLaT9MHr@O&s8*FUfA9ipUDcBYWMLy"
+		"key": "GENERATED_AT_RUNTIME_NOT_READ_FROM_THIS_FILE"
 	},
 	{
 		"algorithm": "HS256",
 		"strength": "HIGH",
-		"key": "12309jansdu912jnas^90nqwq!@!#oqihr82343n"
+		"key": "GENERATED_AT_RUNTIME_NOT_READ_FROM_THIS_FILE"
 	}
-	
+
 ]
