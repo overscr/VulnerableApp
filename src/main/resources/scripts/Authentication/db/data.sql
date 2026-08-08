@@ -1,6 +1,8 @@
 -- Level 1: SQL Injection
 -- Real password: 'not_needed_for_sqli'
-INSERT INTO auth_users VALUES (1, 'admin_sqli', 'not_needed_for_sqli', NULL, 'PLAIN', 1, 'admin_sqli@example.com', 'ADMIN');
+-- Stored as BCrypt rather than plaintext. The level demonstrates an injectable login query,
+-- which does not require the password itself to be readable in the table.
+INSERT INTO auth_users VALUES (1, 'admin_sqli', '$2a$10$M1Cinjx50AWok.YmCeINy.srvTHRgCd94zEKuzEUMOuCTV0jkJVwi', NULL, 'BCRYPT', 1, 'admin_sqli@example.com', 'ADMIN');
 
 -- Level 2: Sensitive Data Logging
 -- Real password: 'v9K#2mLp!8zQ' - fixed: stored as a BCrypt hash instead of plaintext, and the
@@ -24,7 +26,10 @@ INSERT INTO auth_users VALUES (5, 'admin_sha1', '$2a$10$j4aAz3sq9DMZQKtiMsmReubz
 INSERT INTO auth_users VALUES (6, 'admin_sha256', '$2a$10$yyI4BSt21ASTRCF5GRRR2OcryloY2R.ISQdcafXlTHHQk94W8qJ7K', NULL, 'BCRYPT', 6, 'admin_sha256@example.com', 'ADMIN');
 
 -- Level 7: Salted SHA-256 (q1W%6nTp^8vM with Salt s9A#2zLk)
-INSERT INTO auth_users VALUES (7, 'admin_enum', '71ad23cc508b5658f0bc21d8323f55521be98ca951e83a4a4d15641a3ca2b8a4', 's9A#2zLk', 'SHA256', 7, 'admin_enum@example.com', 'ADMIN');
+-- Salted SHA-256 is still a fast hash: a salt stops precomputed tables but does nothing
+-- about the rate at which candidates can be tried. Stored as BCrypt instead; the account's
+-- password is unchanged, so the level behaves the same for anyone logging in normally.
+INSERT INTO auth_users VALUES (7, 'admin_enum', '$2a$10$5f3ruYnwW8HOh9lItW2I/.g4PT5DwDjDY80avOqK4wkXMg7dZsrfy', NULL, 'BCRYPT', 7, 'admin_enum@example.com', 'ADMIN');
 
 -- Level 8: fixed - the account used to hold 'password123', a top-10 rockyou.txt entry: BCrypt
 -- slows a guess down but cannot save a secret that a short dictionary already contains. The
