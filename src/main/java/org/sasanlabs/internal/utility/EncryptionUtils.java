@@ -115,23 +115,40 @@ public class EncryptionUtils {
         return VAULT_KEY;
     }
 
+    private static final int GCM_IV_LENGTH_BYTES = 12;
+    private static final int GCM_TAG_LENGTH_BITS = 128;
+
     /**
-     * VULNERABILITY NOTE: ECB mode does not use an IV and reveals patterns (CWE-327).
+     * FIXED (CWE-327/CWE-329): encrypts using AES/GCM/NoPadding with a fresh, randomly generated
+     * IV per call. GCM is an authenticated mode (detects tampering) and, unlike ECB, never leaks
+     * repeating plaintext-block patterns since the IV randomizes every encryption. The IV is
+     * prefixed to the ciphertext so it can be recovered for decryption; the IV is not secret.
      *
      * @param plaintext plaintext to encrypt
      * @param key AES key to encrypt with
      */
     public static String encrypt(String plaintext, SecretKey key) throws EncryptionException {
         try {
-            Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-            cipher.init(Cipher.ENCRYPT_MODE, key);
+            byte[] iv = new byte[GCM_IV_LENGTH_BYTES];
+            new SecureRandom().nextBytes(iv);
 
-            byte[] encrypted = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(encrypted);
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv);
+            cipher.init(Cipher.ENCRYPT_MODE, key, gcmParameterSpec);
+
+            byte[] ciphertext = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+
+            byte[] ivAndCiphertext = new byte[iv.length + ciphertext.length];
+            System.arraycopy(iv, 0, ivAndCiphertext, 0, iv.length);
+            System.arraycopy(ciphertext, 0, ivAndCiphertext, iv.length, ciphertext.length);
+
+            return Base64.getEncoder().encodeToString(ivAndCiphertext);
         } catch (NoSuchPaddingException | NoSuchAlgorithmException e) {
             throw new EncryptionException("AES configuration not found ", e);
         } catch (InvalidKeyException e) {
             throw new EncryptionException("The provided key is invalid for AES encryption", e);
+        } catch (InvalidAlgorithmParameterException e) {
+            throw new EncryptionException("Invalid GCM parameters", e);
         } catch (IllegalBlockSizeException | BadPaddingException e) {
             throw new EncryptionException(
                     "AES encryption failed due to block size or padding issues", e);
@@ -139,18 +156,29 @@ public class EncryptionUtils {
     }
 
     /**
-     * Decrypts a value produced by {@link #encrypt(String, SecretKey)} using AES/ECB/PKCS5Padding.
+     * Decrypts a value produced by {@link #encrypt(String, SecretKey)}: extracts the IV prefix
+     * and decrypts/authenticates the remainder using AES/GCM/NoPadding.
      *
-     * @param ciphertextBase64 Base64 ciphertext produced by {@link #encrypt}
+     * @param ivAndCiphertextBase64 Base64 of IV || ciphertext produced by {@link #encrypt}
      * @param key AES key used to encrypt
      */
-    public static String decrypt(String ciphertextBase64, SecretKey key)
+    public static String decrypt(String ivAndCiphertextBase64, SecretKey key)
             throws EncryptionException {
         try {
-            byte[] ciphertext = Base64.getDecoder().decode(ciphertextBase64);
+            byte[] ivAndCiphertext = Base64.getDecoder().decode(ivAndCiphertextBase64);
+            if (ivAndCiphertext.length < GCM_IV_LENGTH_BYTES) {
+                throw new EncryptionException("Ciphertext is too short to contain an IV");
+            }
 
-            Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-            cipher.init(Cipher.DECRYPT_MODE, key);
+            byte[] iv = new byte[GCM_IV_LENGTH_BYTES];
+            byte[] ciphertext = new byte[ivAndCiphertext.length - GCM_IV_LENGTH_BYTES];
+            System.arraycopy(ivAndCiphertext, 0, iv, 0, GCM_IV_LENGTH_BYTES);
+            System.arraycopy(
+                    ivAndCiphertext, GCM_IV_LENGTH_BYTES, ciphertext, 0, ciphertext.length);
+
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv);
+            cipher.init(Cipher.DECRYPT_MODE, key, gcmParameterSpec);
 
             byte[] plaintext = cipher.doFinal(ciphertext);
             return new String(plaintext, StandardCharsets.UTF_8);
@@ -158,6 +186,8 @@ public class EncryptionUtils {
             throw new EncryptionException("AES configuration not found ", e);
         } catch (InvalidKeyException e) {
             throw new EncryptionException("The provided key is invalid for AES decryption", e);
+        } catch (InvalidAlgorithmParameterException e) {
+            throw new EncryptionException("Invalid GCM parameters", e);
         } catch (IllegalBlockSizeException | BadPaddingException e) {
             throw new EncryptionException(
                     "AES decryption failed — ciphertext may be corrupt or tampered with", e);

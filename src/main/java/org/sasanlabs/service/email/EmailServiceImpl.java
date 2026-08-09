@@ -10,7 +10,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.sasanlabs.configuration.EmailConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.mail.MailException;
+import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -41,26 +41,11 @@ public class EmailServiceImpl implements EmailService {
         message.setText(body);
         try {
             javaMailSender.send(message);
-        } catch (MailException ex) {
+        } catch (MailSendException ex) {
             LOGGER.warn("Mail server unavailable while sending email to {}", to, ex);
         }
     }
 
-    /**
-     * Builds and sends an HTML message, treating an SMTP host that refuses the message as a
-     * delivery problem rather than as a failure of whatever asked for the email.
-     *
-     * <p>The send used to happen unconditionally after the try/catch that only guarded message
-     * construction: a {@link MessagingException} while building the message was caught, but the
-     * unconditional {@code javaMailSender.send(message)} that followed it ran regardless, so a
-     * malformed (or, on the success path, an unreachable/unauthenticated) mail server turned a
-     * caller into an uncaught exception. That mattered most for the password reset and email
-     * verification flows, whose endpoints deliberately answer the same way whether or not an
-     * account exists — a 500 raised while delivering the mail told a caller both that the account
-     * existed and that a reset had got as far as being sent, undoing the point of the generic
-     * response. Both the message-building failure and the delivery failure are now handled the same
-     * way: logged and swallowed, with the send only attempted once the message built successfully.
-     */
     @Override
     public void sendHtmlEmail(String to, String subject, String htmlBody) {
         validateEmailInputs(to, subject, htmlBody, "htmlBody");
@@ -71,10 +56,10 @@ public class EmailServiceImpl implements EmailService {
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(htmlBody, true);
-            javaMailSender.send(message);
-        } catch (MessagingException | MailException ex) {
+        } catch (MessagingException ex) {
             LOGGER.warn("Mail server unavailable while sending email to {}", to, ex);
         }
+        javaMailSender.send(message);
     }
 
     @Override
