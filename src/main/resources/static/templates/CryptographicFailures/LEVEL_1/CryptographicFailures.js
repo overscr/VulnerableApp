@@ -1,3 +1,20 @@
+// Server-supplied text is untrusted as far as this page is concerned - it includes level
+// commentary and, for some levels, a decoy value - and was previously written into the page via
+// innerHTML, which parses its argument as markup rather than plain text. Rendering it through a
+// bold text node instead means the string can only ever display as text, never execute as markup.
+function renderServerText(container, label, text) {
+  container.textContent = "";
+  if (label) {
+    let labelNode = document.createElement("strong");
+    labelNode.textContent = label;
+    container.appendChild(labelNode);
+    container.appendChild(document.createTextNode(" "));
+  }
+  let textNode = document.createElement("strong");
+  textNode.textContent = text;
+  container.appendChild(textNode);
+}
+
 function loadChallenge() {
   let url = getUrlForVulnerabilityLevel();
   doGetAjaxCall(displayChallenge, url, true);
@@ -5,7 +22,7 @@ function loadChallenge() {
 
 function displayChallenge(data) {
   let challengeDiv = document.getElementById("challenge");
-  challengeDiv.innerHTML = "<strong>" + data.content + "</strong>";
+  renderServerText(challengeDiv, null, data.content);
   if (data.isValid) {
     challengeDiv.className = "challenge-secure";
   } else {
@@ -22,7 +39,7 @@ function addingEventListenerToSubmitButton() {
 
       if (!password) {
         let resultDiv = document.getElementById("result");
-        resultDiv.innerHTML = "<strong>Please enter a password guess.</strong>";
+        renderServerText(resultDiv, null, "Please enter a password guess.");
         resultDiv.style.color = "red";
         return;
       }
@@ -40,13 +57,8 @@ function addingEventListenerToSubmitButton() {
 
 function appendResponseCallback(data) {
   let resultDiv = document.getElementById("result");
-  if (data.isValid) {
-    resultDiv.innerHTML = "<strong>Result:</strong> " + data.content;
-    resultDiv.className = "result-success";
-  } else {
-    resultDiv.innerHTML = "<strong>Result:</strong> " + data.content;
-    resultDiv.className = "result-failure";
-  }
+  renderServerText(resultDiv, "Result:", data.content);
+  resultDiv.className = data.isValid ? "result-success" : "result-failure";
 }
 
 addingEventListenerToSubmitButton();
