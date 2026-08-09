@@ -1,10 +1,6 @@
 function loadChallenge() {
   let url = getUrlForVulnerabilityLevel();
-  // The level endpoints only answer POST now, so the description is fetched with an empty
-  // submission instead of a GET.
-  doPostAjaxCall(displayChallenge, url, true, "", {
-    "Content-Type": "application/x-www-form-urlencoded",
-  });
+  doGetAjaxCall(displayChallenge, url, true);
 }
 
 function displayChallenge(data) {
@@ -31,14 +27,14 @@ function addingEventListenerToSubmitButton() {
         return;
       }
 
-      // The guess goes in the request body, not the URL — a URL is written verbatim into
-      // access logs and browser history and is replayed in any outbound Referer header.
-      let body = new URLSearchParams();
-      body.append("password", password);
+      let params = new URLSearchParams();
+      params.append("password", password);
 
-      doPostAjaxCall(appendResponseCallback, url, true, body.toString(), {
-        "Content-Type": "application/x-www-form-urlencoded",
-      });
+      doGetAjaxCall(
+        appendResponseCallback,
+        url + "?" + params.toString(),
+        true
+      );
     });
 }
 
