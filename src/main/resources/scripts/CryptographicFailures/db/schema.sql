@@ -11,6 +11,7 @@ CREATE TABLE cryptographic_failures_vault (
 -- Application user has full access (for functional purposes)
 GRANT ALL ON cryptographic_failures_vault TO application;
 
--- A read-only user for exploration by the attacker/user
-CREATE USER IF NOT EXISTS cryptographic_failures_user PASSWORD 'cryptographic_failures_password';
-GRANT SELECT ON cryptographic_failures_vault TO cryptographic_failures_user;
+-- This table used to also provision a standing, read-only account with a hardcoded password
+-- (CWE-798) granting direct SELECT access to every level's stored secret, bypassing whatever
+-- protection the application layer applied. That account has been removed; the application
+-- user above retains the access it actually needs, and nothing else can read this table.
