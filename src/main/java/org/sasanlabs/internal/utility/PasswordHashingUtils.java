@@ -71,8 +71,13 @@ public final class PasswordHashingUtils {
 
         String[] saltAndHash = saltedSha256Hash.split(HASH_SEPARATOR, 2);
         if (saltAndHash.length != 2) {
-            // Backward compatibility for old plaintext test data.
-            return saltedSha256Hash.equals(rawPassword);
+            // A stored value with no salt separator cannot be a genuine salted-SHA-256 record,
+            // so there is nothing to authenticate against. The previous behavior here fell back
+            // to comparing the raw guess against the stored value directly - a plaintext-password
+            // comparison hiding inside a function whose entire contract is "the password is never
+            // compared in the clear". Any legitimately seeded record always carries the
+            // separator; a stored value without one is malformed and must never authenticate.
+            return false;
         }
 
         String calculatedHash = sha256Hex(saltAndHash[0], rawPassword);
